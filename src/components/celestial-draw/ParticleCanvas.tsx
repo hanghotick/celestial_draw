@@ -1,3 +1,4 @@
+
 "use client";
 import React, { useRef, useEffect, useCallback } from 'react';
 import * as THREE from 'three';
@@ -11,7 +12,7 @@ interface ParticleCanvasProps {
   isDrawingActive: boolean;
 }
 
-const PARTICLE_SIZE = 0.1;
+const PARTICLE_SIZE = 0.25; // Increased particle size
 const BOUNDING_BOX_SIZE = 10;
 
 export function ParticleCanvas({
@@ -58,7 +59,7 @@ export function ParticleCanvas({
     controlsRef.current.enableDamping = true;
     controlsRef.current.dampingFactor = 0.05;
 
-    // Lighting
+    // Lighting (less critical for MeshBasicMaterial, but good to keep for future changes)
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
     sceneRef.current.add(ambientLight);
     const pointLight = new THREE.PointLight(0xffffff, 1, 100);
@@ -83,10 +84,9 @@ export function ParticleCanvas({
     particlesRef.current = [];
     const particleGeometry = new THREE.SphereGeometry(PARTICLE_SIZE, 16, 16);
     for (let i = 1; i <= maxNumber; i++) {
-      const particleMaterial = new THREE.MeshStandardMaterial({
+      // Switched to MeshBasicMaterial - no lighting needed, uses vertex colors or material.color
+      const particleMaterial = new THREE.MeshBasicMaterial({
         color: new THREE.Color(`hsl(${THREE.MathUtils.randInt(0,360)}, 70%, 70%)`),
-        roughness: 0.5,
-        metalness: 0.1,
       });
       const particle = new THREE.Mesh(particleGeometry, particleMaterial);
       particle.position.set(
@@ -120,9 +120,9 @@ export function ParticleCanvas({
 
         // Simple bounding box collision
         ['x', 'y', 'z'].forEach(axis => {
-          if (Math.abs(particle.position[axis]) > BOUNDING_BOX_SIZE / 2) {
-            particle.userData.velocity[axis] *= -1;
-            particle.position[axis] = Math.sign(particle.position[axis]) * (BOUNDING_BOX_SIZE / 2);
+          if (Math.abs(particle.position[axis as keyof THREE.Vector3]) > BOUNDING_BOX_SIZE / 2) {
+            particle.userData.velocity[axis as keyof THREE.Vector3] *= -1;
+            particle.position[axis as keyof THREE.Vector3] = Math.sign(particle.position[axis as keyof THREE.Vector3]) * (BOUNDING_BOX_SIZE / 2);
           }
         });
       }
@@ -151,17 +151,13 @@ export function ParticleCanvas({
       window.removeEventListener('resize', handleResize);
       if (animationFrameIdRef.current) cancelAnimationFrame(animationFrameIdRef.current);
       if (rendererRef.current) {
-         // Dispose of Three.js objects
         rendererRef.current.dispose();
         sceneRef.current?.traverse(object => {
             if (object instanceof THREE.Mesh) {
                 if (object.geometry) object.geometry.dispose();
                 if (object.material) {
-                    if (Array.isArray(object.material)) {
-                        object.material.forEach(material => material.dispose());
-                    } else {
-                        object.material.dispose();
-                    }
+                    const materials = Array.isArray(object.material) ? object.material : [object.material];
+                    materials.forEach(material => material.dispose());
                 }
             }
         });
@@ -178,11 +174,9 @@ export function ParticleCanvas({
     if (isDrawingActive && particlesRef.current.length > 0 && !isAnimatingDrawRef.current) {
       isAnimatingDrawRef.current = true;
       
-      // Reset previous drawn states visually if needed (particles might still be colored)
       particlesRef.current.forEach(p => {
         if (p.userData.isDrawn || p.userData.isBeingDrawn) {
-            if (p.material instanceof THREE.MeshStandardMaterial) {
-                // Reset color to an original-like state, or store original color
+            if (p.material instanceof THREE.MeshBasicMaterial) { // Updated material check
                  p.material.color.setHSL(THREE.MathUtils.randFloat(0,1), 0.7, 0.7);
             }
         }
@@ -197,7 +191,7 @@ export function ParticleCanvas({
       const drawnValues: number[] = [];
 
       if (numbersToSelect === 0) {
-        onNumbersDrawn([]); // No numbers to draw
+        onNumbersDrawn([]);
         isAnimatingDrawRef.current = false;
         return;
       }
@@ -214,17 +208,9 @@ export function ParticleCanvas({
       drawnValues.sort((a, b) => a - b);
   
       selectedForDraw.forEach((p, index) => {
-        if (p.material instanceof THREE.MeshStandardMaterial) {
-          p.material.color.set(0x6F00ED); // Accent color: Electric Indigo
+        if (p.material instanceof THREE.MeshBasicMaterial) { // Updated material check
+          p.material.color.set(0x6F00ED); 
         }
-        // Simple animation: move to front. More complex line-up needs target positions.
-        // For now, just highlighting.
-        const targetZ = (cameraRef.current?.position.z ?? 15) - 5;
-        const targetX = (index - (numbersToSelect -1) / 2) * (PARTICLE_SIZE * 5) ; // Spread them out
-        
-        // Basic "animation" - instantly move for this simplified example
-        // In a real scenario, you'd use a tweening library or manual interpolation in animate()
-        // p.position.set(targetX, 0, targetZ);
       });
   
       setTimeout(() => {

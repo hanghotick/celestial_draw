@@ -1,3 +1,4 @@
+
 "use client";
 import { useLocalization } from '@/hooks/useLocalization';
 import { Button } from '@/components/ui/button';
@@ -15,6 +16,7 @@ interface ControlPanelProps {
   setNumToDraw: (value: number) => void;
   onStartDraw: () => void;
   isDrawing: boolean;
+  isLoadingScene: boolean;
 }
 
 export function ControlPanel({
@@ -24,8 +26,10 @@ export function ControlPanel({
   setNumToDraw,
   onStartDraw,
   isDrawing,
+  isLoadingScene,
 }: ControlPanelProps) {
   const { t } = useLocalization();
+  const controlsDisabled = isDrawing || isLoadingScene;
 
   return (
     <TooltipProvider>
@@ -50,7 +54,7 @@ export function ControlPanel({
             min="10"
             max="1000" // Practical limit for performance without InstancedMesh
             className="bg-input"
-            disabled={isDrawing}
+            disabled={controlsDisabled}
           />
         </div>
 
@@ -77,11 +81,11 @@ export function ControlPanel({
             min="1"
             max="10"
             className="bg-input"
-            disabled={isDrawing}
+            disabled={controlsDisabled}
           />
         </div>
 
-        <Button onClick={onStartDraw} disabled={isDrawing} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
+        <Button onClick={onStartDraw} disabled={controlsDisabled} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
           {isDrawing ? t('drawingInProgress') : t('startDraw')}
         </Button>
 

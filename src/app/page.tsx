@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
@@ -68,6 +69,7 @@ export default function CelestialDrawPage() {
               setNumToDraw={setNumToDraw}
               onStartDraw={handleDrawStart}
               isDrawing={isDrawing}
+              isLoadingScene={isLoading}
             />
           </SidebarContent>
           <SidebarFooter className="p-4 mt-auto border-t border-sidebar-border">

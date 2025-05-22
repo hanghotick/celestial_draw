@@ -12,8 +12,10 @@ interface ParticleCanvasProps {
   isDrawingActive: boolean;
 }
 
-const PARTICLE_SIZE = 0.25; // Increased particle size
+const PARTICLE_SIZE = 0.25; 
 const BOUNDING_BOX_SIZE = 10;
+const STAR_COUNT = 5000; // Reduced from 10000
+const MAX_PIXEL_RATIO = 1.5; // Cap pixel ratio for performance
 
 export function ParticleCanvas({
   maxNumber,
@@ -51,7 +53,8 @@ export function ParticleCanvas({
     // Renderer
     rendererRef.current = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     rendererRef.current.setSize(currentMount.clientWidth, currentMount.clientHeight);
-    rendererRef.current.setPixelRatio(window.devicePixelRatio);
+    // Cap device pixel ratio for performance on mobile devices
+    rendererRef.current.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
     currentMount.appendChild(rendererRef.current.domElement);
 
     // Controls
@@ -59,17 +62,15 @@ export function ParticleCanvas({
     controlsRef.current.enableDamping = true;
     controlsRef.current.dampingFactor = 0.05;
 
-    // Lighting (less critical for MeshBasicMaterial, but good to keep for future changes)
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8); // Ambient light is still useful for overall scene visibility if other non-basic materials are added.
     sceneRef.current.add(ambientLight);
-    const pointLight = new THREE.PointLight(0xffffff, 1, 100);
-    pointLight.position.set(5, 5, 5);
-    sceneRef.current.add(pointLight);
+    // PointLight removed as particles are MeshBasicMaterial and starfield doesn't use it.
 
     // Starfield
     const starGeometry = new THREE.BufferGeometry();
     const starVertices = [];
-    for (let i = 0; i < 10000; i++) {
+    for (let i = 0; i < STAR_COUNT; i++) { // Use reduced star count
       const x = THREE.MathUtils.randFloatSpread(200);
       const y = THREE.MathUtils.randFloatSpread(200);
       const z = THREE.MathUtils.randFloatSpread(200);
@@ -84,7 +85,6 @@ export function ParticleCanvas({
     particlesRef.current = [];
     const particleGeometry = new THREE.SphereGeometry(PARTICLE_SIZE, 16, 16);
     for (let i = 1; i <= maxNumber; i++) {
-      // Switched to MeshBasicMaterial - no lighting needed, uses vertex colors or material.color
       const particleMaterial = new THREE.MeshBasicMaterial({
         color: new THREE.Color(`hsl(${THREE.MathUtils.randInt(0,360)}, 70%, 70%)`),
       });
@@ -122,7 +122,9 @@ export function ParticleCanvas({
         ['x', 'y', 'z'].forEach(axis => {
           if (Math.abs(particle.position[axis as keyof THREE.Vector3]) > BOUNDING_BOX_SIZE / 2) {
             particle.userData.velocity[axis as keyof THREE.Vector3] *= -1;
-            particle.position[axis as keyof THREE.Vector3] = Math.sign(particle.position[axis as keyof THREE.Vector3]) * (BOUNDING_BOX_SIZE / 2);
+            // Ensure particle stays within bounds after reversing velocity
+            particle.position[axis as keyof THREE.Vector3] = 
+              Math.max(-BOUNDING_BOX_SIZE / 2, Math.min(BOUNDING_BOX_SIZE / 2, particle.position[axis as keyof THREE.Vector3]));
           }
         });
       }
@@ -141,6 +143,8 @@ export function ParticleCanvas({
         const width = mountRef.current.clientWidth;
         const height = mountRef.current.clientHeight;
         rendererRef.current.setSize(width, height);
+        // Re-apply capped pixel ratio on resize
+        rendererRef.current.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
         cameraRef.current.aspect = width / height;
         cameraRef.current.updateProjectionMatrix();
       }
@@ -159,13 +163,26 @@ export function ParticleCanvas({
                     const materials = Array.isArray(object.material) ? object.material : [object.material];
                     materials.forEach(material => material.dispose());
                 }
+            } else if (object instanceof THREE.Points) {
+                if (object.geometry) object.geometry.dispose();
+                if (object.material) {
+                     const materials = Array.isArray(object.material) ? object.material : [object.material];
+                    materials.forEach(material => material.dispose());
+                }
+            } else if (object instanceof THREE.Light) {
+                object.dispose?.(); // Some lights have dispose methods
             }
         });
+        sceneRef.current?.clear(); // Clear the scene
         if(mountRef.current && rendererRef.current.domElement){
              mountRef.current.removeChild(rendererRef.current.domElement);
         }
       }
       particlesRef.current = [];
+      sceneRef.current = null;
+      cameraRef.current = null;
+      rendererRef.current = null;
+      controlsRef.current = null;
     };
   }, [initScene, animate]);
 
@@ -176,7 +193,7 @@ export function ParticleCanvas({
       
       particlesRef.current.forEach(p => {
         if (p.userData.isDrawn || p.userData.isBeingDrawn) {
-            if (p.material instanceof THREE.MeshBasicMaterial) { // Updated material check
+            if (p.material instanceof THREE.MeshBasicMaterial) { 
                  p.material.color.setHSL(THREE.MathUtils.randFloat(0,1), 0.7, 0.7);
             }
         }
@@ -208,11 +225,13 @@ export function ParticleCanvas({
       drawnValues.sort((a, b) => a - b);
   
       selectedForDraw.forEach((p, index) => {
-        if (p.material instanceof THREE.MeshBasicMaterial) { // Updated material check
-          p.material.color.set(0x6F00ED); 
+        if (p.material instanceof THREE.MeshBasicMaterial) { 
+          p.material.color.set(0x6F00ED); // Accent color
         }
       });
   
+      // Shorter delay for faster feel
+      const drawAnimationTime = 1000 + numbersToSelect * 200;
       setTimeout(() => {
         selectedForDraw.forEach(p => {
           p.userData.isDrawn = true;
@@ -220,7 +239,7 @@ export function ParticleCanvas({
         });
         onNumbersDrawn(drawnValues);
         isAnimatingDrawRef.current = false;
-      }, 1500 + numbersToSelect * 300); 
+      }, drawAnimationTime); 
     }
   }, [isDrawingActive, numToDraw, onNumbersDrawn, maxNumber]);
 
